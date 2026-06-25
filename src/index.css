@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-base: #0f0f0f;
+  --color-surface: #181818;
+  --color-surface-hover: #272727;
+  --color-border: #303030;
+  --color-text-primary: #f1f1f1;
+  --color-text-secondary: #aaaaaa;
+  --color-brand: #ff0033;
+  --color-brand-hover: #e6002e;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-base);
+  color: var(--color-text-primary);
+  font-family: "Roboto", "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* slimmer scrollbars to match a video platform feel */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-surface-hover);
+  border-radius: 8px;
+}
+
+/* line-clamp helpers for video titles / descriptions */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
