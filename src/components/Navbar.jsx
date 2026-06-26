@@ -1,93 +1,107 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
-import { logoutUser } from "../api/authApi";
-import { clearUser } from "../features/auth/authSlice";
-import { toggleSidebar } from "../features/ui/uiSlice";
-import { FiMenu, FiSearch, FiVideo, FiLogOut } from "react-icons/fi";
-import Button from "./Button";
+import { useDispatch, useSelector } from "react-redux";
+import { FiMenu, FiSearch, FiUpload } from "react-icons/fi";
 
-export default function Navbar() {
+import { logoutUser } from "../api/authApi.js";
+import { clearUser } from "../features/auth/authSlice.js";
+import { toggleSidebar } from "../features/ui/uiSlice.js";
+import Button from "./Button.jsx";
+
+const Navbar = () => {
+    const { user, isAuthenticated, authChecked } = useSelector(
+        (state) => state.auth
+    );
     const [searchQuery, setSearchQuery] = useState("");
-    const navigate = useNavigate();
+
     const dispatch = useDispatch();
-    const { isAuthenticated, user } = useSelector((state) => state.auth);
-
-    // ✅ Uses ui-avatars to generate a custom image with the user's initial
-    const defaultAvatar = `https://ui-avatars.com/api/?name=${user?.username || "User"}&background=1F2937&color=fff`;
-
-    const handleSearch = (e) => {
-        e.preventDefault();
-        if (searchQuery.trim()) {
-            navigate(`/results?search_query=${encodeURIComponent(searchQuery.trim())}`);
-        }
-    };
+    const navigate = useNavigate();
 
     const handleLogout = async () => {
         try {
             await logoutUser();
+        } finally {
+            // clear local state regardless of whether the API call succeeded,
+            // so the UI never gets stuck showing a logged-in state by mistake
             dispatch(clearUser());
             navigate("/login");
-        } catch (error) {
-            console.error("Logout failed", error);
         }
     };
 
+    const handleSearch = (e) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) return;
+        navigate(`/results?q=${encodeURIComponent(searchQuery.trim())}`);
+    };
+
     return (
-        <nav className="sticky top-0 z-50 w-full bg-gray-900 border-b border-gray-800 px-4 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <button onClick={() => dispatch(toggleSidebar())} className="text-white p-2 hover:bg-gray-800 rounded-full transition-colors">
-                    <FiMenu size={24} />
+        <nav className="flex items-center justify-between gap-4 px-4 py-3 border-b border-border bg-surface sticky top-0 z-20">
+            <div className="flex items-center gap-3 shrink-0">
+                <button
+                    onClick={() => dispatch(toggleSidebar())}
+                    className="text-text-primary p-2 rounded-full hover:bg-surface-hover transition-colors"
+                    aria-label="Toggle sidebar"
+                >
+                    <FiMenu size={20} />
                 </button>
-                <Link to="/" className="text-2xl font-bold text-white tracking-tighter">
-                    Video<span className="text-red-500">Tube</span>
+                <Link to="/" className="text-brand font-bold text-lg shrink-0">
+                    VideoTube
                 </Link>
             </div>
 
-            <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-xl mx-8 items-center bg-gray-900 border border-gray-700 rounded-full overflow-hidden">
+            <form
+                onSubmit={handleSearch}
+                className="flex-1 max-w-xl hidden sm:flex items-stretch"
+            >
                 <input
                     type="text"
-                    placeholder="Search"
-                    className="w-full bg-transparent text-white px-4 py-2 focus:outline-none"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search videos"
+                    className="flex-1 bg-base border border-border rounded-l-full px-4 py-1.5 text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-brand"
                 />
-                <button type="submit" className="px-5 py-2 bg-gray-800 border-l border-gray-700 hover:bg-gray-700 text-gray-300 transition-colors">
-                    <FiSearch size={20} />
+                <button
+                    type="submit"
+                    className="px-4 rounded-r-full border border-l-0 border-border bg-surface-hover hover:bg-border transition-colors text-text-primary"
+                    aria-label="Search"
+                >
+                    <FiSearch size={18} />
                 </button>
             </form>
 
-            <div className="flex items-center gap-4">
-                {isAuthenticated ? (
+            <div className="flex items-center gap-3 shrink-0">
+                {!authChecked ? null : isAuthenticated ? (
                     <>
-                        <Link to="/upload" className="hidden sm:flex items-center gap-2 text-white hover:bg-gray-800 px-3 py-2 rounded-full transition-colors">
-                            <FiVideo size={20} />
+                        <Link
+                            to="/upload"
+                            className="hidden sm:flex items-center gap-2 text-text-primary px-3 py-1.5 rounded-full hover:bg-surface-hover transition-colors"
+                        >
+                            <FiUpload size={18} />
+                            <span className="text-sm">Upload</span>
                         </Link>
-                        
+
                         <Link to={`/channel/${user?.username}`}>
-                            <img 
-                                src={user?.avatar || defaultAvatar} 
-                                alt="avatar" 
-                                className="w-8 h-8 rounded-full object-cover bg-gray-800 border border-gray-700" 
-                                onError={(e) => {
-                                    e.target.onerror = null; 
-                                    e.target.src = defaultAvatar; // ✅ Fallback updated
-                                }}
-                            />
+                            {user?.avatar && (
+                                <img
+                                    src={user.avatar}
+                                    alt={user.username}
+                                    className="w-8 h-8 rounded-full object-cover"
+                                />
+                            )}
                         </Link>
-                        
-                        <button onClick={handleLogout} className="text-gray-300 hover:text-white p-2 hover:bg-gray-800 rounded-full transition-colors">
-                            <FiLogOut size={20} />
-                        </button>
+
+                        <Button variant="secondary" onClick={handleLogout}>
+                            Logout
+                        </Button>
                     </>
                 ) : (
                     <Link to="/login">
-                        <Button className="rounded-full bg-transparent border border-gray-600 text-blue-400 hover:bg-blue-500/10">
-                            Sign in
-                        </Button>
+                        <Button variant="primary">Sign in</Button>
                     </Link>
                 )}
             </div>
         </nav>
     );
-}
+};
+
+export default Navbar;

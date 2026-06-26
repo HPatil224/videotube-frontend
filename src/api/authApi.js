@@ -1,35 +1,41 @@
-import axiosInstance from "./axiosInstance";
+import { axiosInstance } from "./axiosInstance.js";
 
-export const registerUser = async (formData) => {
-    const response = await axiosInstance.post("/users/register", formData, {
-        headers: {
-            "Content-Type": "multipart/form-data",
-        },
+export const registerUser = (formData) => {
+    // formData must be a FormData instance, since register accepts
+    // multipart/form-data (text fields + avatar + coverImage files)
+    return axiosInstance.post("/users/register", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
     });
-    return response.data;
 };
 
-export const loginUser = async (credentials) => {
-    const response = await axiosInstance.post("/users/login", credentials);
-    return response.data;
+export const loginUser = ({ email, username, password }) => {
+    return axiosInstance.post("/users/login", { email, username, password });
 };
 
-export const logoutUser = async () => {
-    const response = await axiosInstance.post("/users/logout");
-    return response.data;
+export const logoutUser = () => {
+    return axiosInstance.post("/users/logout");
 };
 
-export const getCurrentUser = async () => {
-    const response = await axiosInstance.get("/users/current-user");
-    return response.data;
+export const getCurrentUser = () => {
+    return axiosInstance.get("/users/current-user");
 };
 
-export const forgotPassword = async (email) => {
-    const response = await axiosInstance.post("/users/forgot-password", { email });
-    return response.data;
+export const changePassword = ({ oldPassword, newPassword }) => {
+    return axiosInstance.post("/users/change-password", { oldPassword, newPassword });
 };
 
-export const resetPassword = async (token, newPassword) => {
-    const response = await axiosInstance.post(`/users/reset-password/${token}`, { newPassword });
-    return response.data;
+export const updateAccountDetails = ({ fullname, email }) => {
+    return axiosInstance.patch("/users/update-account", { fullname, email });
+};
+
+export const updateAvatar = (formData) => {
+    return axiosInstance.patch("/users/avatar", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+    });
+};
+
+export const updateCoverImage = (formData) => {
+    return axiosInstance.patch("/users/cover-image", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+    });
 };

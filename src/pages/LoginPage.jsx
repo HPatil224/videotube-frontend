@@ -1,96 +1,96 @@
 import { useState } from "react";
 import { useDispatch } from "react-redux";
-import { useNavigate, useLocation, Link } from "react-router-dom";
-import { loginUser } from "../api/authApi";
-import { setUser } from "../features/auth/authSlice";
-import Input from "../components/Input";
-import Button from "../components/Button";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 
-export default function LoginPage() {
+import { loginUser } from "../api/authApi.js";
+import { setUser } from "../features/auth/authSlice.js";
+import { useAsyncAction } from "../hooks/useAsyncAction.js";
+
+import Input from "../components/Input.jsx";
+import Button from "../components/Button.jsx";
+
+const LoginPage = () => {
+    // people can log in with either email or username - one shared field,
+    // we decide which key to send based on whether it looks like an email
     const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
-    
+
+    const { run, isLoading, error } = useAsyncAction();
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const location = useLocation();
 
-    const from = location.state?.from?.pathname || "/";
-
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError("");
-        setLoading(true);
+
+        if (!identifier.trim() || !password) {
+            return;
+        }
+
+        const isEmail = identifier.includes("@");
+        const payload = isEmail
+            ? { email: identifier.trim(), password }
+            : { username: identifier.trim(), password };
 
         try {
-            const isEmail = identifier.includes("@");
-            const payload = isEmail 
-                ? { email: identifier, password } 
-                : { username: identifier, password };
+            const response = await run(() => loginUser(payload));
 
-            // Wait for the API call to finish
-            const response = await loginUser(payload);
-            
-            // ✅ Fixed: Properly extracting the nested user data from the ApiResponse
-            dispatch(setUser(response.data.user)); 
-            
-            navigate(from, { replace: true });
+            dispatch(setUser(response.data.data.user));
+
+            // if the user was redirected here from a protected page, send them
+            // back to where they were trying to go; otherwise go home
+            const redirectTo = location.state?.from || "/";
+            navigate(redirectTo, { replace: true });
         } catch (err) {
-            setError(err.response?.data?.message || "Invalid credentials");
-        } finally {
-            setLoading(false);
+            // run() already records the message in `error` for display
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
-            <div className="w-full max-w-md bg-gray-800 rounded-xl p-8 shadow-lg border border-gray-700">
-                <div className="flex justify-center mb-6">
-                    <span className="text-3xl font-bold text-white">
-                        Video<span className="text-red-500">Tube</span>
-                    </span>
-                </div>
-                
-                <h2 className="text-2xl font-bold text-white mb-6 text-center">Sign in</h2>
+        <div className="min-h-screen flex items-center justify-center bg-base px-4">
+            <form
+                onSubmit={handleSubmit}
+                className="w-full max-w-sm bg-surface border border-border rounded-lg p-6 flex flex-col gap-4"
+            >
+                <h1 className="text-xl font-semibold text-text-primary text-center">
+                    Sign in to VideoTube
+                </h1>
 
-                {error && <div className="bg-red-500/10 border border-red-500 text-red-500 p-3 rounded mb-4 text-sm">{error}</div>}
+                <Input
+                    label="Email or username"
+                    type="text"
+                    autoComplete="username"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="you@example.com"
+                />
 
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <Input
-                        label="Email or Username"
-                        type="text"
-                        placeholder="Enter your email or username"
-                        value={identifier}
-                        onChange={(e) => setIdentifier(e.target.value)}
-                        required
-                    />
-                    
-                    <div>
-                        <Input
-                            label="Password"
-                            type="password"
-                            placeholder="Enter your password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                        />
-                        <div className="flex justify-end mt-1 mb-2">
-                            <Link to="/forgot-password" className="text-sm text-blue-500 hover:text-blue-400 transition-colors">
-                                Forgot password?
-                            </Link>
-                        </div>
-                    </div>
+                <Input
+                    label="Password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                />
 
-                    <Button type="submit" isLoading={loading} className="w-full mt-2">
-                        Sign In
-                    </Button>
-                </form>
+                {error && (
+                    <p className="text-brand text-sm text-center">{error}</p>
+                )}
 
-                <div className="mt-6 text-center text-sm text-gray-400">
-                    Don't have an account? <Link to="/register" className="text-blue-500 hover:text-blue-400">Sign up</Link>
-                </div>
-            </div>
+                <Button type="submit" isLoading={isLoading} className="w-full">
+                    Sign in
+                </Button>
+
+                <p className="text-text-secondary text-sm text-center">
+                    New here?{" "}
+                    <Link to="/register" className="text-brand hover:underline">
+                        Create an account
+                    </Link>
+                </p>
+            </form>
         </div>
     );
-}
+};
+
+export default LoginPage;

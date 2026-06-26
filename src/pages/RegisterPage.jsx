@@ -48,16 +48,22 @@ const RegisterPage = () => {
             formData.append("coverImage", coverImageFile);
         }
 
-        await run(() => registerUser(formData));
+        try {
+            await run(() => registerUser(formData));
 
-        // registration doesn't log the user in automatically on the backend,
-        // so we immediately log in with the same credentials right after
-        const loginResponse = await run(() =>
-            loginUser({ email: email.trim(), password })
-        );
+            // registration doesn't log the user in automatically on the backend,
+            // so we immediately log in with the same credentials right after
+            const loginResponse = await run(() =>
+                loginUser({ email: email.trim(), password })
+            );
 
-        dispatch(setUser(loginResponse.data.data.user));
-        navigate("/", { replace: true });
+            dispatch(setUser(loginResponse.data.data.user));
+            navigate("/", { replace: true });
+        } catch (err) {
+            // run() already records the message in `error` for display -
+            // this catch just stops the unhandled rejection from freezing
+            // the UI silently with no feedback
+        }
     };
 
     return (

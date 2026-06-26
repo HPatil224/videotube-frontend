@@ -1,48 +1,80 @@
 import { NavLink } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { FiHome, FiUsers, FiUser, FiThumbsUp, FiList, FiTwitter, FiBarChart2 } from "react-icons/fi";
+import {
+    FiHome,
+    FiUsers,
+    FiThumbsUp,
+    FiUser,
+    FiList,
+    FiMessageSquare,
+    FiBarChart2,
+} from "react-icons/fi";
 
-export default function Sidebar() {
-    const { isOpen } = useSelector((state) => state.ui);
-    const { isAuthenticated, user } = useSelector((state) => state.auth);
+const NavItem = ({ to, icon, label }) => (
+    <NavLink
+        to={to}
+        className={({ isActive }) =>
+            `flex items-center gap-4 px-4 py-2.5 rounded-lg text-sm transition-colors ${
+                isActive
+                    ? "bg-surface-hover text-text-primary font-medium"
+                    : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            }`
+        }
+    >
+        {icon}
+        <span>{label}</span>
+    </NavLink>
+);
 
-    // ✅ Dynamically map the routes, ensuring 'Your channel' uses the logged-in user's username
-    const navItems = [
-        { name: "Home", path: "/", icon: <FiHome size={20} /> },
-        { name: "Subscriptions", path: "/subscriptions", icon: <FiUsers size={20} /> },
-        { 
-            name: "Your channel", 
-            path: isAuthenticated && user?.username ? `/channel/${user.username}` : "/login", 
-            icon: <FiUser size={20} /> 
-        },
-        { name: "Liked videos", path: "/liked-videos", icon: <FiThumbsUp size={20} /> },
-        { name: "Playlists", path: "/playlists", icon: <FiList size={20} /> },
-        { name: "Tweets", path: "/tweets", icon: <FiTwitter size={20} /> },
-        { name: "Dashboard", path: "/dashboard", icon: <FiBarChart2 size={20} /> },
-    ];
+const Sidebar = () => {
+    const isSidebarOpen = useSelector((state) => state.ui.isSidebarOpen);
+    const { user, isAuthenticated } = useSelector((state) => state.auth);
+
+    if (!isSidebarOpen) return null;
 
     return (
-        <aside className={`fixed md:sticky top-16 left-0 z-40 h-[calc(100vh-4rem)] bg-gray-900 border-r border-gray-800 transition-all duration-300 overflow-y-auto ${isOpen ? "w-64" : "w-0 md:w-20"} flex-shrink-0`}>
-            <div className="flex flex-col py-4">
-                {navItems.map((item) => (
-                    <NavLink
-                        key={item.name}
-                        to={item.path}
-                        className={({ isActive }) => `
-                            flex items-center gap-4 px-6 py-3 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors
-                            ${isActive ? "bg-gray-800 text-white font-semibold" : ""}
-                            ${!isOpen && "md:justify-center px-0"}
-                        `}
-                        title={!isOpen ? item.name : ""}
-                    >
-                        <span className="min-w-[20px]">{item.icon}</span>
-                        {/* Hide text if sidebar is closed (mobile) or collapsed (desktop) */}
-                        <span className={`whitespace-nowrap ${!isOpen ? "md:hidden" : ""}`}>
-                            {item.name}
-                        </span>
-                    </NavLink>
-                ))}
-            </div>
+        <aside className="w-56 shrink-0 border-r border-border bg-surface h-[calc(100vh-57px)] sticky top-[57px] overflow-y-auto py-3 px-2 flex flex-col gap-1">
+            <NavItem to="/" icon={<FiHome size={20} />} label="Home" />
+
+            {isAuthenticated && (
+                <>
+                    <NavItem
+                        to="/subscriptions"
+                        icon={<FiUsers size={20} />}
+                        label="Subscriptions"
+                    />
+
+                    <div className="border-t border-border my-2" />
+
+                    <NavItem
+                        to={`/channel/${user?.username}`}
+                        icon={<FiUser size={20} />}
+                        label="Your channel"
+                    />
+                    <NavItem
+                        to="/liked-videos"
+                        icon={<FiThumbsUp size={20} />}
+                        label="Liked videos"
+                    />
+                    <NavItem
+                        to="/playlists"
+                        icon={<FiList size={20} />}
+                        label="Playlists"
+                    />
+                    <NavItem
+                        to="/tweets"
+                        icon={<FiMessageSquare size={20} />}
+                        label="Tweets"
+                    />
+                    <NavItem
+                        to="/dashboard"
+                        icon={<FiBarChart2 size={20} />}
+                        label="Dashboard"
+                    />
+                </>
+            )}
         </aside>
     );
-}
+};
+
+export default Sidebar;
