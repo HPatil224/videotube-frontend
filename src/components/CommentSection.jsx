@@ -1,135 +1,118 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import { getVideoComments, addComment, deleteComment } from "../api/commentApi";
-import { formatTimeAgo } from "../utils/format";
-import Button from "./Button";
-import Input from "./Input";
+import { Link } from "react-router-dom";
 
-export default function CommentSection({ videoId }) {
+import { getVideoComments, addComment } from "../api/commentApi.js";
+import CommentItem from "./CommentItem.jsx";
+import Button from "./Button.jsx";
+
+const CommentSection = ({ videoId }) => {
+    const { isAuthenticated } = useSelector((state) => state.auth);
     const [comments, setComments] = useState([]);
+    const [totalComments, setTotalComments] = useState(0);
     const [newComment, setNewComment] = useState("");
-    const [loading, setLoading] = useState(true);
-    const [submitLoading, setSubmitLoading] = useState(false);
-    const { isAuthenticated, user } = useSelector((state) => state.auth);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isPosting, setIsPosting] = useState(false);
 
     useEffect(() => {
+        let isMounted = true;
+
         const fetchComments = async () => {
+            setIsLoading(true);
             try {
                 const response = await getVideoComments(videoId);
-                // Extract array based on your backend pagination structure
-                const payload = response.data?.data || response.data;
-                const commentsArray = payload?.docs || (Array.isArray(payload) ? payload : []);
-                setComments(commentsArray);
-            } catch (error) {
-                console.error("Failed to load comments", error);
+                if (!isMounted) return;
+                setComments(response.data.data.docs || []);
+                setTotalComments(response.data.data.totalDocs || 0);
+            } catch (err) {
+                // leave comments empty on failure
             } finally {
-                setLoading(false);
+                if (isMounted) setIsLoading(false);
             }
         };
 
-        if (videoId) fetchComments();
+        fetchComments();
+        return () => {
+            isMounted = false;
+        };
     }, [videoId]);
 
     const handleAddComment = async (e) => {
         e.preventDefault();
         if (!newComment.trim()) return;
-        
-        setSubmitLoading(true);
+
+        setIsPosting(true);
         try {
-            const response = await addComment(videoId, newComment);
-            const addedComment = response.data?.data || response.data;
-            
-            // Add the new comment to the top of the list
-            setComments([addedComment, ...comments]);
+            const response = await addComment(videoId, newComment.trim());
+            setComments((prev) => [response.data.data, ...prev]);
+            setTotalComments((prev) => prev + 1);
             setNewComment("");
-        } catch (error) {
-            console.error("Failed to add comment", error);
+        } catch (err) {
+            // leave the typed comment in the input on failure
         } finally {
-            setSubmitLoading(false);
+            setIsPosting(false);
         }
     };
 
-    const handleDelete = async (commentId) => {
-        try {
-            await deleteComment(commentId);
-            setComments(comments.filter((c) => c._id !== commentId));
-        } catch (error) {
-            console.error("Failed to delete comment", error);
-        }
+    const handleUpdated = (updatedComment) => {
+        setComments((prev) =>
+            prev.map((c) => (c._id === updatedComment._id ? updatedComment : c))
+        );
     };
 
-    if (loading) return <div className="mt-6 text-gray-400">Loading comments...</div>;
+    const handleDeleted = (commentId) => {
+        setComments((prev) => prev.filter((c) => c._id !== commentId));
+        setTotalComments((prev) => Math.max(0, prev - 1));
+    };
 
     return (
-        <div className="mt-8">
-            <h3 className="text-xl font-bold text-white mb-6">
-                {comments.length} Comments
+        <div className="mt-6">
+            <h3 className="text-text-primary font-medium mb-4">
+                {totalComments} {totalComments === 1 ? "Comment" : "Comments"}
             </h3>
 
-            {/* Add Comment Form */}
             {isAuthenticated ? (
-                <form onSubmit={handleAddComment} className="flex gap-4 mb-8">
-                    <img 
-                        src={user?.avatar} 
-                        alt="Your avatar" 
-                        className="w-10 h-10 rounded-full object-cover bg-gray-800"
+                <form onSubmit={handleAddComment} className="flex gap-2 mb-6">
+                    <input
+                        type="text"
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Add a comment..."
+                        className="flex-1 bg-transparent border-b border-border focus:border-brand outline-none text-sm text-text-primary py-1.5"
                     />
-                    <div className="flex-1 flex flex-col items-end gap-2">
-                        <Input
-                            type="text"
-                            placeholder="Add a comment..."
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                            className="bg-transparent border-b border-gray-600 rounded-none px-0 focus:border-white"
-                        />
-                        {newComment.trim() && (
-                            <Button type="submit" isLoading={submitLoading} className="rounded-full px-4 py-1.5 text-sm">
-                                Comment
-                            </Button>
-                        )}
-                    </div>
+                    <Button type="submit" isLoading={isPosting} disabled={!newComment.trim()}>
+                        Comment
+                    </Button>
                 </form>
             ) : (
-                <p className="text-gray-400 mb-8 pb-4 border-b border-gray-800">
-                    Please sign in to leave a comment.
+                <p className="text-text-secondary text-sm mb-6">
+                    <Link to="/login" className="text-brand hover:underline">
+                        Sign in
+                    </Link>{" "}
+                    to leave a comment.
                 </p>
             )}
 
-            {/* Comments List */}
-            <div className="flex flex-col gap-6">
-                {comments.map((comment) => (
-                    <div key={comment._id} className="flex gap-4 group">
-                        <img 
-                            src={comment.owner?.avatar} 
-                            alt={comment.owner?.username} 
-                            className="w-10 h-10 rounded-full object-cover bg-gray-800"
+            {isLoading ? (
+                <p className="text-text-secondary text-sm">Loading comments...</p>
+            ) : comments.length === 0 ? (
+                <p className="text-text-secondary text-sm">
+                    No comments yet. Be the first to say something.
+                </p>
+            ) : (
+                <div className="divide-y divide-border">
+                    {comments.map((comment) => (
+                        <CommentItem
+                            key={comment._id}
+                            comment={comment}
+                            onUpdated={handleUpdated}
+                            onDeleted={handleDeleted}
                         />
-                        <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                                <span className="font-semibold text-white text-sm">
-                                    @{comment.owner?.username}
-                                </span>
-                                <span className="text-xs text-gray-400">
-                                    {formatTimeAgo(comment.createdAt)}
-                                </span>
-                            </div>
-                            <p className="text-gray-200 text-sm mt-1 whitespace-pre-wrap">
-                                {comment.content}
-                            </p>
-                        </div>
-                        
-                        {/* Delete Button (Only visible if the logged-in user owns the comment) */}
-                        {user?._id === comment.owner?._id && (
-                            <button 
-                                onClick={() => handleDelete(comment._id)}
-                                className="text-red-500 text-sm opacity-0 group-hover:opacity-100 transition-opacity self-start"
-                            >
-                                Delete
-                            </button>
-                        )}
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
-}
+};
+
+export default CommentSection;

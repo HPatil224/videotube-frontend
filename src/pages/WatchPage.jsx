@@ -1,125 +1,173 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { getVideoById } from "../api/videoApi";
-import { toggleSubscription } from "../api/subscriptionApi";
-import { toggleVideoLike } from "../api/likeApi";
-import { formatTimeAgo, formatViews } from "../utils/format";
-import VideoCardSkeleton from "../components/VideoCardSkeleton";
-import Button from "../components/Button";
-import CommentSection from "../components/CommentSection";
+import { useParams } from "react-router-dom";
 import { useSelector } from "react-redux";
+import { FiThumbsUp } from "react-icons/fi";
 
-export default function WatchPage() {
+import { getVideoById } from "../api/videoApi.js";
+import { toggleVideoLike } from "../api/likeApi.js";
+import { toggleSubscription } from "../api/subscriptionApi.js";
+import { formatViews, formatTimeAgo } from "../utils/format.js";
+
+import Button from "../components/Button.jsx";
+import CommentSection from "../components/CommentSection.jsx";
+
+const WatchPage = () => {
     const { videoId } = useParams();
+    const { user, isAuthenticated } = useSelector((state) => state.auth);
+
     const [video, setVideo] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-    const { isAuthenticated, user } = useSelector((state) => state.auth);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // local-only optimistic state for like/subscribe, since the backend
+    // doesn't tell us our own like/subscribe status on this endpoint
+    const [isLiked, setIsLiked] = useState(false);
+    const [likeBusy, setLikeBusy] = useState(false);
+    const [isSubscribed, setIsSubscribed] = useState(false);
+    const [subscribeBusy, setSubscribeBusy] = useState(false);
 
     useEffect(() => {
+        let isMounted = true;
+
         const fetchVideo = async () => {
+            setIsLoading(true);
+            setError(null);
             try {
-                setLoading(true);
                 const response = await getVideoById(videoId);
+                if (!isMounted) return;
                 setVideo(response.data.data);
             } catch (err) {
-                setError(err.response?.data?.message || "Failed to load video");
+                if (!isMounted) return;
+                setError(
+                    err?.response?.data?.message || "This video could not be loaded"
+                );
             } finally {
-                setLoading(false);
+                if (isMounted) setIsLoading(false);
             }
         };
+
         fetchVideo();
+        return () => {
+            isMounted = false;
+        };
     }, [videoId]);
 
-    const handleSubscribe = async () => {
-        if (!isAuthenticated) return alert("Please log in to subscribe");
-        if (user._id === video.owner._id) return alert("You cannot subscribe to your own channel");
+    const handleToggleLike = async () => {
+        if (!isAuthenticated || likeBusy) return;
+        setLikeBusy(true);
         try {
-            await toggleSubscription(video.owner._id);
-            alert("Subscription toggled successfully!");
+            const response = await toggleVideoLike(videoId);
+            setIsLiked(response.data.data.isLiked);
         } catch (err) {
-            console.error(err);
+            // leave like state unchanged on failure
+        } finally {
+            setLikeBusy(false);
         }
     };
 
-    const handleLike = async () => {
-        if (!isAuthenticated) return alert("Please log in to like");
+    const handleToggleSubscribe = async () => {
+        if (!isAuthenticated || subscribeBusy || !video?.owner?._id) return;
+        setSubscribeBusy(true);
         try {
-            await toggleVideoLike(video._id);
-            alert("Like toggled successfully!");
+            const response = await toggleSubscription(video.owner._id);
+            setIsSubscribed(response.data.data.subscribed);
         } catch (err) {
-            console.error(err);
+            // leave subscribe state unchanged on failure
+        } finally {
+            setSubscribeBusy(false);
         }
     };
 
-    if (loading) return <div className="p-4"><VideoCardSkeleton /></div>;
-    if (error) return <div className="p-4 text-red-500 text-center">{error}</div>;
-    if (!video) return null;
+    if (isLoading) {
+        return (
+            <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+                <div className="w-full aspect-video bg-surface rounded-xl animate-pulse" />
+            </div>
+        );
+    }
+
+    if (error || !video) {
+        return (
+            <div className="p-6 text-center">
+                <p className="text-brand">{error || "Video not found"}</p>
+            </div>
+        );
+    }
+
+    const isOwnVideo = user?._id === video.owner?._id;
 
     return (
-        <div className="max-w-7xl mx-auto p-4 flex flex-col lg:flex-row gap-6">
-            <div className="flex-1">
-                {/* Video Player */}
+        <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+            <div className="w-full aspect-video bg-black rounded-xl overflow-hidden">
                 <video
+                    key={video._id}
                     src={video.videoFile}
                     poster={video.thumbnail}
                     controls
-                    autoPlay
-                    className="w-full aspect-video bg-black rounded-xl object-contain"
-                ></video>
+                    className="w-full h-full"
+                />
+            </div>
 
-                {/* Video Info */}
-                <div className="mt-4">
-                    <h1 className="text-xl md:text-2xl font-bold text-white">{video.title}</h1>
-                    <div className="flex flex-col md:flex-row md:items-center justify-between mt-3 gap-4">
-                        <div className="flex items-center gap-4">
-                            <Link to={`/channel/${video.owner.username}`}>
-                                <img
-                                    src={video.owner.avatar}
-                                    alt={video.owner.username}
-                                    className="w-12 h-12 rounded-full object-cover bg-gray-800"
-                                />
-                            </Link>
-                            <div>
-                                <Link to={`/channel/${video.owner.username}`} className="font-semibold text-white hover:text-gray-300">
-                                    {video.owner.fullname}
-                                </Link>
-                                <p className="text-sm text-gray-400">@{video.owner.username}</p>
-                            </div>
-                            {user?._id !== video.owner._id && (
-                                <Button onClick={handleSubscribe} className="ml-2 rounded-full px-4 py-2 bg-white text-black font-semibold hover:bg-gray-200">
-                                    Subscribe
-                                </Button>
-                            )}
-                        </div>
+            <h1 className="text-text-primary text-lg font-semibold mt-4">
+                {video.title}
+            </h1>
 
-                        <div className="flex items-center gap-2">
-                            <Button onClick={handleLike} className="rounded-full bg-gray-800 text-white hover:bg-gray-700 flex items-center gap-2">
-                                <span>👍</span> Like
-                            </Button>
-                        </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
+                <div className="flex items-center gap-3">
+                    {video.owner?.avatar && (
+                        <img
+                            src={video.owner.avatar}
+                            alt={video.owner.username}
+                            className="w-10 h-10 rounded-full object-cover"
+                        />
+                    )}
+                    <div>
+                        <p className="text-text-primary text-sm font-medium">
+                            {video.owner?.username}
+                        </p>
+                        <p className="text-text-secondary text-xs">
+                            {video.owner?.fullname}
+                        </p>
                     </div>
+
+                    {!isOwnVideo && (
+                        <Button
+                            variant={isSubscribed ? "secondary" : "primary"}
+                            isLoading={subscribeBusy}
+                            onClick={handleToggleSubscribe}
+                            className="ml-2"
+                        >
+                            {isSubscribed ? "Subscribed" : "Subscribe"}
+                        </Button>
+                    )}
                 </div>
 
-                {/* Description Box */}
-                <div className="mt-4 bg-gray-800/50 rounded-xl p-4 text-sm text-gray-200">
-                    <p className="font-semibold text-white mb-2">
-                        {formatViews(video.views)} views • {formatTimeAgo(video.createdAt)}
-                    </p>
-                    <p className="whitespace-pre-wrap">{video.description}</p>
-                </div>
-
-                {/* ✅ Comment Section integrated here */}
-                <CommentSection videoId={video._id} />
+                <button
+                    onClick={handleToggleLike}
+                    disabled={likeBusy}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${
+                        isLiked
+                            ? "bg-surface-hover border-brand text-brand"
+                            : "border-border text-text-primary hover:bg-surface-hover"
+                    }`}
+                >
+                    <FiThumbsUp size={18} />
+                    <span className="text-sm">{isLiked ? "Liked" : "Like"}</span>
+                </button>
             </div>
 
-            {/* Sidebar Placeholder for later */}
-            <div className="w-full lg:w-[350px] hidden lg:block">
-                <p className="text-gray-400 text-sm font-semibold mb-4">Up Next</p>
-                <div className="h-64 border border-gray-800 border-dashed rounded-xl flex items-center justify-center p-4 text-center text-gray-500">
-                    More videos will go here
-                </div>
+            <div className="bg-surface rounded-lg p-3 mt-4">
+                <p className="text-text-secondary text-sm">
+                    {formatViews(video.views)} · {formatTimeAgo(video.createdAt)}
+                </p>
+                <p className="text-text-primary text-sm mt-2 whitespace-pre-wrap">
+                    {video.description}
+                </p>
             </div>
+
+            <CommentSection videoId={videoId} />
         </div>
     );
-}
+};
+
+export default WatchPage;

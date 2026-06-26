@@ -1,16 +1,17 @@
-import axiosInstance from "./axiosInstance";
+import { axiosInstance } from "./axiosInstance.js";
 
-export const getVideoComments = async (videoId, page = 1, limit = 10) => {
-    const response = await axiosInstance.get(`/comments/${videoId}?page=${page}&limit=${limit}`);
-    return response.data;
+export const getVideoComments = (videoId, { page = 1, limit = 20 } = {}) => {
+    return axiosInstance.get(`/comments/${videoId}`, { params: { page, limit } });
 };
 
-export const addComment = async (videoId, content) => {
-    const response = await axiosInstance.post(`/comments/${videoId}`, { content });
-    return response.data;
+export const addComment = (videoId, content) => {
+    return axiosInstance.post(`/comments/${videoId}`, { content });
 };
 
-export const deleteComment = async (commentId) => {
-    const response = await axiosInstance.delete(`/comments/c/${commentId}`);
-    return response.data;
+export const updateComment = (commentId, content) => {
+    return axiosInstance.patch(`/comments/c/${commentId}`, { content });
+};
+
+export const deleteComment = (commentId) => {
+    return axiosInstance.delete(`/comments/c/${commentId}`);
 };

@@ -1,163 +1,138 @@
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
-import { getUserPlaylists, createPlaylist } from "../api/playlistApi";
-import { FiPlayCircle, FiList, FiX } from "react-icons/fi";
-import Button from "../components/Button";
-import Input from "../components/Input";
+import { FiList, FiPlus } from "react-icons/fi";
 
-export default function PlaylistsPage() {
+import { getUserPlaylists, createPlaylist } from "../api/playlistApi.js";
+import Input from "../components/Input.jsx";
+import Textarea from "../components/Textarea.jsx";
+import Button from "../components/Button.jsx";
+import EmptyState from "../components/EmptyState.jsx";
+
+const PlaylistsPage = () => {
     const { user } = useSelector((state) => state.auth);
     const [playlists, setPlaylists] = useState([]);
-    const [loading, setLoading] = useState(true);
-    
-    // Modal State
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const [showForm, setShowForm] = useState(false);
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const fetchPlaylists = async () => {
-        if (!user?._id) return;
-        setLoading(true);
-        try {
-            const response = await getUserPlaylists(user._id);
-            const payload = response.data?.data || response.data;
-            setPlaylists(Array.isArray(payload) ? payload : []);
-        } catch (error) {
-            console.error("Failed to load playlists", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [isCreating, setIsCreating] = useState(false);
 
     useEffect(() => {
-        fetchPlaylists();
-    }, [user]);
+        if (!user?._id) return;
+        let isMounted = true;
 
-    const handleCreatePlaylist = async (e) => {
+        const fetchPlaylists = async () => {
+            setIsLoading(true);
+            try {
+                const response = await getUserPlaylists(user._id);
+                if (isMounted) setPlaylists(response.data.data || []);
+            } catch (err) {
+                // leave list empty on failure
+            } finally {
+                if (isMounted) setIsLoading(false);
+            }
+        };
+
+        fetchPlaylists();
+        return () => {
+            isMounted = false;
+        };
+    }, [user?._id]);
+
+    const handleCreate = async (e) => {
         e.preventDefault();
-        if (!name.trim()) return;
-        
-        setIsSubmitting(true);
+        if (!name.trim() || !description.trim()) return;
+
+        setIsCreating(true);
         try {
-            await createPlaylist(name, description);
-            // Close modal and reset form
-            setIsModalOpen(false);
+            const response = await createPlaylist({
+                name: name.trim(),
+                description: description.trim(),
+            });
+            setPlaylists((prev) => [
+                { ...response.data.data, videoCount: 0 },
+                ...prev,
+            ]);
             setName("");
             setDescription("");
-            // Refresh the playlists to show the new one
-            fetchPlaylists();
-        } catch (error) {
-            console.error("Failed to create playlist", error);
+            setShowForm(false);
+        } catch (err) {
+            // keep the form open with entered values on failure
         } finally {
-            setIsSubmitting(false);
+            setIsCreating(false);
         }
     };
 
     return (
-        <div className="p-4 md:p-6 max-w-7xl mx-auto w-full relative">
-            <div className="flex justify-between items-center mb-8">
-                <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-                        <span className="bg-gray-800 p-3 rounded-full"><FiList /></span> Your Playlists
-                    </h1>
-                    <p className="text-gray-400 mt-2">{playlists.length} playlists created</p>
-                </div>
-                
-                {/* ✅ Button now opens the modal */}
-                <button 
-                    onClick={() => setIsModalOpen(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                >
-                    + New Playlist
-                </button>
+        <div className="p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-4">
+                <h1 className="text-text-primary text-xl font-semibold">
+                    Your playlists
+                </h1>
+                <Button variant="secondary" onClick={() => setShowForm((prev) => !prev)}>
+                    <span className="flex items-center gap-1.5">
+                        <FiPlus size={16} /> New playlist
+                    </span>
+                </Button>
             </div>
 
-            {/* Content Grid */}
-            {loading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {[...Array(4)].map((_, i) => (
-                        <div key={i} className="w-full aspect-video bg-gray-800 animate-pulse rounded-xl"></div>
-                    ))}
-                </div>
-            ) : playlists.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {showForm && (
+                <form
+                    onSubmit={handleCreate}
+                    className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-3 mb-6 max-w-md"
+                >
+                    <Input
+                        label="Name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="My favorite videos"
+                    />
+                    <Textarea
+                        label="Description"
+                        rows={2}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="What's this playlist about?"
+                    />
+                    <Button type="submit" isLoading={isCreating} className="self-start">
+                        Create
+                    </Button>
+                </form>
+            )}
+
+            {isLoading ? (
+                <p className="text-text-secondary text-sm">Loading...</p>
+            ) : playlists.length === 0 ? (
+                <EmptyState
+                    icon={<FiList size={40} />}
+                    title="No playlists yet"
+                    description="Create a playlist to start organizing videos."
+                />
+            ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {playlists.map((playlist) => (
-                        <Link 
-                            key={playlist._id} 
-                            to={`/playlist/${playlist._id}`} 
-                            className="group flex flex-col gap-2 cursor-pointer"
+                        <Link
+                            key={playlist._id}
+                            to={`/playlist/${playlist._id}`}
+                            className="bg-surface border border-border rounded-lg p-4 hover:bg-surface-hover transition-colors"
                         >
-                            <div className="relative w-full aspect-[4/3] bg-gray-800 rounded-xl overflow-hidden border border-gray-700 flex items-center justify-center group-hover:border-gray-500 transition-colors">
-                                <FiPlayCircle size={48} className="text-gray-600 group-hover:text-white transition-colors" />
-                                <div className="absolute bottom-0 w-full bg-black/80 text-white text-xs p-2 flex justify-between">
-                                    <span>Playlist</span>
-                                </div>
-                            </div>
-                            <h3 className="text-white font-semibold line-clamp-1 mt-1 group-hover:text-blue-400 transition-colors">
+                            <h3 className="text-text-primary font-medium">
                                 {playlist.name}
                             </h3>
-                            <p className="text-gray-400 text-sm line-clamp-2">
-                                {playlist.description || "No description"}
+                            <p className="text-text-secondary text-sm mt-1 line-clamp-2">
+                                {playlist.description}
+                            </p>
+                            <p className="text-text-secondary text-xs mt-2">
+                                {playlist.videoCount ?? 0} videos
                             </p>
                         </Link>
                     ))}
                 </div>
-            ) : (
-                <div className="flex flex-col items-center justify-center py-20 text-center bg-gray-800/50 rounded-xl border border-gray-800">
-                    <FiList size={48} className="text-gray-600 mb-4" />
-                    <p className="text-gray-300 text-lg font-semibold">No playlists created yet</p>
-                    <p className="text-gray-500 text-sm mt-2">Organize your favorite videos by creating a playlist.</p>
-                </div>
-            )}
-
-            {/* ✅ Create Playlist Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-                    <div className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-md p-6 shadow-2xl">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-white">Create New Playlist</h2>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white">
-                                <FiX size={24} />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleCreatePlaylist} className="flex flex-col gap-4">
-                            <Input
-                                label="Playlist Name"
-                                placeholder="E.g., Web Dev Tutorials"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                required
-                            />
-                            
-                            <div className="flex flex-col gap-1">
-                                <label className="text-sm font-medium text-gray-300">Description (Optional)</label>
-                                <textarea
-                                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 h-24 resize-none"
-                                    placeholder="What is this playlist about?"
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                ></textarea>
-                            </div>
-
-                            <div className="flex justify-end gap-3 mt-4">
-                                <button 
-                                    type="button" 
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <Button type="submit" isLoading={isSubmitting}>
-                                    Create
-                                </Button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
             )}
         </div>
     );
-}
+};
+
+export default PlaylistsPage;

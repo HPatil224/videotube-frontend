@@ -1,12 +1,13 @@
-import axiosInstance from "./axiosInstance";
+import { axiosInstance } from "./axiosInstance.js";
 
-export const toggleSubscription = async (channelId) => {
-    const response = await axiosInstance.post(`/subscriptions/c/${channelId}`);
-    return response.data;
+export const toggleSubscription = (channelId) => {
+    return axiosInstance.post(`/subscriptions/c/${channelId}`);
 };
 
-// ✅ Added function to fetch a user's subscribed channels
-export const getSubscribedChannels = async (subscriberId) => {
-    const response = await axiosInstance.get(`/subscriptions/u/${subscriberId}`);
-    return response.data;
+export const getChannelSubscribers = (channelId) => {
+    return axiosInstance.get(`/subscriptions/c/${channelId}/subscribers`);
+};
+
+export const getSubscribedChannels = (subscriberId) => {
+    return axiosInstance.get(`/subscriptions/u/${subscriberId}/channels`);
 };

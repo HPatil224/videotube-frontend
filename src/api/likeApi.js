@@ -1,12 +1,17 @@
-import axiosInstance from "./axiosInstance";
+import { axiosInstance } from "./axiosInstance.js";
 
-export const toggleVideoLike = async (videoId) => {
-    const response = await axiosInstance.post(`/likes/toggle/v/${videoId}`);
-    return response.data;
+export const toggleVideoLike = (videoId) => {
+    return axiosInstance.post(`/likes/toggle/v/${videoId}`);
 };
 
-// ✅ Added the new fetch function
-export const getLikedVideos = async () => {
-    const response = await axiosInstance.get(`/likes/videos`);
-    return response.data;
+export const toggleCommentLike = (commentId) => {
+    return axiosInstance.post(`/likes/toggle/c/${commentId}`);
+};
+
+export const toggleTweetLike = (tweetId) => {
+    return axiosInstance.post(`/likes/toggle/t/${tweetId}`);
+};
+
+export const getLikedVideos = () => {
+    return axiosInstance.get("/likes/videos");
 };

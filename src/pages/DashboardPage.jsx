@@ -1,77 +1,157 @@
 import { useEffect, useState } from "react";
-import { getChannelStats, getChannelVideos } from "../api/dashboardApi";
-import { formatViews } from "../utils/format";
-import VideoCard from "../components/VideoCard";
+import { Link } from "react-router-dom";
+import { FiEye, FiUsers, FiVideo, FiThumbsUp } from "react-icons/fi";
 
-export default function DashboardPage() {
+import { getChannelStats, getChannelVideos } from "../api/dashboardApi.js";
+import { togglePublishStatus, deleteVideo } from "../api/videoApi.js";
+import { formatViews, formatTimeAgo } from "../utils/format.js";
+import Button from "../components/Button.jsx";
+
+const StatCard = ({ icon, label, value }) => (
+    <div className="bg-surface border border-border rounded-lg p-4 flex items-center gap-3">
+        <div className="text-brand">{icon}</div>
+        <div>
+            <p className="text-text-secondary text-xs">{label}</p>
+            <p className="text-text-primary text-lg font-semibold">{value}</p>
+        </div>
+    </div>
+);
+
+const DashboardPage = () => {
     const [stats, setStats] = useState(null);
     const [videos, setVideos] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
+        let isMounted = true;
+
+        const fetchDashboard = async () => {
+            setIsLoading(true);
             try {
-                setLoading(true);
-                const statsResponse = await getChannelStats();
-                const videosResponse = await getChannelVideos();
-                
-                setStats(statsResponse.data?.data || statsResponse.data);
-                
-                // Extract videos array safely
-                const videoPayload = videosResponse.data?.data || videosResponse.data;
-                const videoArray = videoPayload?.docs || (Array.isArray(videoPayload) ? videoPayload : []);
-                setVideos(videoArray);
-            } catch (error) {
-                console.error("Failed to load dashboard data", error);
+                const [statsRes, videosRes] = await Promise.all([
+                    getChannelStats(),
+                    getChannelVideos(),
+                ]);
+                if (isMounted) {
+                    setStats(statsRes.data.data);
+                    setVideos(videosRes.data.data || []);
+                }
+            } catch (err) {
+                // leave dashboard empty on failure
             } finally {
-                setLoading(false);
+                if (isMounted) setIsLoading(false);
             }
         };
 
-        fetchDashboardData();
+        fetchDashboard();
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
-    if (loading) return <div className="p-8 text-center text-white">Loading dashboard...</div>;
+    const handleTogglePublish = async (videoId) => {
+        try {
+            const response = await togglePublishStatus(videoId);
+            setVideos((prev) =>
+                prev.map((v) =>
+                    v._id === videoId
+                        ? { ...v, isPublished: response.data.data.isPublished }
+                        : v
+                )
+            );
+        } catch (err) {
+            // leave publish state unchanged on failure
+        }
+    };
+
+    const handleDelete = async (videoId) => {
+        try {
+            await deleteVideo(videoId);
+            setVideos((prev) => prev.filter((v) => v._id !== videoId));
+        } catch (err) {
+            // leave video in list on failure
+        }
+    };
+
+    if (isLoading) {
+        return <p className="p-6 text-text-secondary text-sm">Loading dashboard...</p>;
+    }
 
     return (
-        <div className="p-4 md:p-8 max-w-7xl mx-auto">
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-8">Channel Dashboard</h1>
+        <div className="p-4 sm:p-6">
+            <h1 className="text-text-primary text-xl font-semibold mb-4">
+                Channel dashboard
+            </h1>
 
-            {/* Stats Cards */}
-            {stats && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-                    <div className="bg-gray-800 border border-gray-700 p-6 rounded-xl text-center">
-                        <h3 className="text-gray-400 text-sm font-semibold mb-2">Total Views</h3>
-                        <p className="text-3xl font-bold text-white">{formatViews(stats.totalViews || 0)}</p>
-                    </div>
-                    <div className="bg-gray-800 border border-gray-700 p-6 rounded-xl text-center">
-                        <h3 className="text-gray-400 text-sm font-semibold mb-2">Total Subscribers</h3>
-                        <p className="text-3xl font-bold text-white">{formatViews(stats.totalSubscribers || 0)}</p>
-                    </div>
-                    <div className="bg-gray-800 border border-gray-700 p-6 rounded-xl text-center">
-                        <h3 className="text-gray-400 text-sm font-semibold mb-2">Total Likes</h3>
-                        <p className="text-3xl font-bold text-white">{formatViews(stats.totalLikes || 0)}</p>
-                    </div>
-                    <div className="bg-gray-800 border border-gray-700 p-6 rounded-xl text-center">
-                        <h3 className="text-gray-400 text-sm font-semibold mb-2">Total Videos</h3>
-                        <p className="text-3xl font-bold text-white">{stats.totalVideos || 0}</p>
-                    </div>
-                </div>
-            )}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+                <StatCard
+                    icon={<FiUsers size={20} />}
+                    label="Subscribers"
+                    value={stats?.totalSubscribers ?? 0}
+                />
+                <StatCard
+                    icon={<FiVideo size={20} />}
+                    label="Videos"
+                    value={stats?.totalVideos ?? 0}
+                />
+                <StatCard
+                    icon={<FiEye size={20} />}
+                    label="Total views"
+                    value={stats?.totalViews ?? 0}
+                />
+                <StatCard
+                    icon={<FiThumbsUp size={20} />}
+                    label="Total likes"
+                    value={stats?.totalLikes ?? 0}
+                />
+            </div>
 
-            {/* Uploaded Videos Grid */}
-            <h2 className="text-xl font-bold text-white mb-6">Your Videos</h2>
-            {videos.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {videos.map((video) => (
-                        <VideoCard key={video._id} video={video} />
-                    ))}
-                </div>
+            <h2 className="text-text-primary font-medium mb-3">Your videos</h2>
+
+            {videos.length === 0 ? (
+                <p className="text-text-secondary text-sm">
+                    You haven't uploaded any videos yet.
+                </p>
             ) : (
-                <div className="bg-gray-800 border border-gray-700 rounded-xl p-10 text-center">
-                    <p className="text-gray-400 mb-4">You haven't uploaded any videos yet.</p>
+                <div className="flex flex-col divide-y divide-border">
+                    {videos.map((video) => (
+                        <div
+                            key={video._id}
+                            className="flex items-center gap-4 py-3"
+                        >
+                            <Link to={`/watch/${video._id}`} className="shrink-0">
+                                <img
+                                    src={video.thumbnail}
+                                    alt={video.title}
+                                    className="w-32 aspect-video object-cover rounded-md"
+                                />
+                            </Link>
+                            <div className="flex-1 min-w-0">
+                                <Link to={`/watch/${video._id}`}>
+                                    <p className="text-text-primary text-sm font-medium line-clamp-1">
+                                        {video.title}
+                                    </p>
+                                </Link>
+                                <p className="text-text-secondary text-xs mt-1">
+                                    {formatViews(video.views)} · {video.likesCount ?? 0} likes ·{" "}
+                                    {formatTimeAgo(video.createdAt)}
+                                </p>
+                            </div>
+                            <Button
+                                variant="secondary"
+                                onClick={() => handleTogglePublish(video._id)}
+                            >
+                                {video.isPublished ? "Unpublish" : "Publish"}
+                            </Button>
+                            <Button variant="ghost" onClick={() => handleDelete(video._id)}>
+                                <span className="text-brand">Delete</span>
+                            </Button>
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
     );
-}
+};
+
+export default DashboardPage;

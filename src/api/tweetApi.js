@@ -1,16 +1,17 @@
-import axiosInstance from "./axiosInstance";
+import { axiosInstance } from "./axiosInstance.js";
 
-export const createTweet = async (content) => {
-    const response = await axiosInstance.post("/tweets", { content });
-    return response.data;
+export const createTweet = (content) => {
+    return axiosInstance.post("/tweets", { content });
 };
 
-export const getUserTweets = async (userId) => {
-    const response = await axiosInstance.get(`/tweets/user/${userId}`);
-    return response.data;
+export const getUserTweets = (userId) => {
+    return axiosInstance.get(`/tweets/user/${userId}`);
 };
 
-export const deleteTweet = async (tweetId) => {
-    const response = await axiosInstance.delete(`/tweets/${tweetId}`);
-    return response.data;
+export const updateTweet = (tweetId, content) => {
+    return axiosInstance.patch(`/tweets/${tweetId}`, { content });
+};
+
+export const deleteTweet = (tweetId) => {
+    return axiosInstance.delete(`/tweets/${tweetId}`);
 };

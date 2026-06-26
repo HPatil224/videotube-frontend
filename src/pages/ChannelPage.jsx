@@ -1,149 +1,228 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { getUserChannelProfile } from "../api/userApi";
-import { getAllVideos } from "../api/videoApi";
-import { toggleSubscription } from "../api/subscriptionApi";
-import VideoCard from "../components/VideoCard";
-import VideoCardSkeleton from "../components/VideoCardSkeleton";
-import Button from "../components/Button";
-import EmptyState from "../components/EmptyState";
+import { FiVideo, FiMessageSquare } from "react-icons/fi";
 
-export default function ChannelPage() {
+import { getUserChannelProfile } from "../api/channelApi.js";
+import { getAllVideos } from "../api/videoApi.js";
+import { getUserTweets } from "../api/tweetApi.js";
+import { toggleSubscription } from "../api/subscriptionApi.js";
+
+import Button from "../components/Button.jsx";
+import VideoCard from "../components/VideoCard.jsx";
+import VideoCardSkeleton from "../components/VideoCardSkeleton.jsx";
+import EmptyState from "../components/EmptyState.jsx";
+
+const TABS = ["Videos", "Tweets"];
+
+const ChannelPage = () => {
     const { username } = useParams();
-    const { isAuthenticated, user: currentUser } = useSelector((state) => state.auth);
-    
-    const [profile, setProfile] = useState(null);
+    const { user: currentUser } = useSelector((state) => state.auth);
+
+    const [channel, setChannel] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [subscribeBusy, setSubscribeBusy] = useState(false);
+
+    const [activeTab, setActiveTab] = useState("Videos");
     const [videos, setVideos] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-    
-    // ✅ Added error states to catch broken images
-    const [coverError, setCoverError] = useState(false);
-    const [avatarError, setAvatarError] = useState(false);
+    const [tweets, setTweets] = useState([]);
+    const [tabLoading, setTabLoading] = useState(true);
 
     useEffect(() => {
-        const fetchChannelData = async () => {
-            setLoading(true);
-            setError("");
-            // Reset image errors when switching profiles
-            setCoverError(false);
-            setAvatarError(false);
-            
+        let isMounted = true;
+
+        const fetchChannel = async () => {
+            setIsLoading(true);
+            setError(null);
             try {
-                const profileResponse = await getUserChannelProfile(username);
-                const channelData = profileResponse.data?.data || profileResponse.data;
-                setProfile(channelData);
-
-                const videosResponse = await getAllVideos({ userId: channelData._id });
-                const payload = videosResponse.data?.data || videosResponse.data;
-                const videoArray = payload?.docs || (Array.isArray(payload) ? payload : []);
-                setVideos(videoArray);
-
+                const response = await getUserChannelProfile(username);
+                if (!isMounted) return;
+                setChannel(response.data.data);
             } catch (err) {
-                console.error(err);
-                setError("Channel not found or failed to load.");
+                if (!isMounted) return;
+                setError(
+                    err?.response?.data?.message || "This channel could not be loaded"
+                );
             } finally {
-                setLoading(false);
+                if (isMounted) setIsLoading(false);
             }
         };
 
-        if (username) {
-            fetchChannelData();
-        }
+        fetchChannel();
+        return () => {
+            isMounted = false;
+        };
     }, [username]);
 
-    const handleSubscribe = async () => {
-        if (!isAuthenticated) return alert("Please log in to subscribe");
-        if (currentUser?._id === profile._id) return alert("You cannot subscribe to your own channel");
-        
+    useEffect(() => {
+        if (!channel?._id) return;
+        let isMounted = true;
+
+        const fetchTabData = async () => {
+            setTabLoading(true);
+            try {
+                if (activeTab === "Videos") {
+                    const response = await getAllVideos({ userId: channel._id, limit: 24 });
+                    if (isMounted) setVideos(response.data.data.docs || []);
+                } else if (activeTab === "Tweets") {
+                    const response = await getUserTweets(channel._id);
+                    if (isMounted) setTweets(response.data.data || []);
+                }
+            } catch (err) {
+                // leave the current tab's list empty on failure
+            } finally {
+                if (isMounted) setTabLoading(false);
+            }
+        };
+
+        fetchTabData();
+        return () => {
+            isMounted = false;
+        };
+    }, [channel?._id, activeTab]);
+
+    const handleToggleSubscribe = async () => {
+        if (!channel?._id || subscribeBusy) return;
+        setSubscribeBusy(true);
         try {
-            await toggleSubscription(profile._id);
-            setProfile((prev) => ({
+            const response = await toggleSubscription(channel._id);
+            setChannel((prev) => ({
                 ...prev,
-                isSubscribed: !prev.isSubscribed,
-                subscribersCount: prev.isSubscribed ? prev.subscribersCount - 1 : prev.subscribersCount + 1
+                isSubscribed: response.data.data.subscribed,
+                subscribersCount:
+                    prev.subscribersCount + (response.data.data.subscribed ? 1 : -1),
             }));
         } catch (err) {
-            console.error("Failed to toggle subscription", err);
+            // leave subscribe state unchanged on failure
+        } finally {
+            setSubscribeBusy(false);
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-white">Loading channel...</div>;
-    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
-    if (!profile) return null;
+    if (isLoading) {
+        return (
+            <div className="animate-pulse">
+                <div className="w-full h-40 sm:h-56 bg-surface" />
+                <div className="p-4 sm:p-6 flex items-center gap-4">
+                    <div className="w-20 h-20 rounded-full bg-surface" />
+                    <div className="h-4 w-40 bg-surface rounded" />
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !channel) {
+        return (
+            <div className="p-6 text-center">
+                <p className="text-brand">{error || "Channel not found"}</p>
+            </div>
+        );
+    }
+
+    const isOwnChannel = currentUser?.username === channel.username;
 
     return (
-        <div className="w-full pb-8">
-            {/* Cover Image Banner */}
-            <div className="w-full h-32 sm:h-48 md:h-64 bg-gray-800 relative">
-                {/* ✅ Added onError handler so it falls back to the gradient if the link is broken */}
-                {profile.coverImage && !coverError ? (
-                    <img 
-                        src={profile.coverImage} 
-                        alt="Cover" 
-                        className="w-full h-full object-cover" 
-                        onError={() => setCoverError(true)}
-                    />
-                ) : (
-                    <div className="w-full h-full bg-gradient-to-r from-blue-900 to-gray-900"></div>
-                )}
-            </div>
+        <div>
+            <div
+                className="w-full h-40 sm:h-56 bg-surface bg-cover bg-center"
+                style={{
+                    backgroundImage: channel.coverImage
+                        ? `url(${channel.coverImage})`
+                        : undefined,
+                }}
+            />
 
-            {/* Channel Header Info */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-4 md:mt-6 flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6">
-                {/* ✅ Added onError handler for the Avatar as well */}
-                <img 
-                    src={!avatarError && profile.avatar ? profile.avatar : "https://via.placeholder.com/150"} 
-                    alt={profile.username} 
-                    className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border-4 border-gray-900 -mt-12 md:-mt-16 bg-gray-800 relative z-10"
-                    onError={() => setAvatarError(true)}
-                />
-                
-                <div className="flex-1 text-center md:text-left">
-                    <h1 className="text-2xl md:text-3xl font-bold text-white">{profile.fullname}</h1>
-                    <p className="text-gray-400 mt-1">
-                        @{profile.username} • {profile.subscribersCount} subscribers • {profile.channelsSubscribedToCount} subscribed
+            <div className="p-4 sm:p-6 flex flex-wrap items-center gap-4 border-b border-border">
+                {channel.avatar && (
+                    <img
+                        src={channel.avatar}
+                        alt={channel.username}
+                        className="w-20 h-20 rounded-full object-cover -mt-12 border-4 border-base"
+                    />
+                )}
+                <div className="flex-1 min-w-0">
+                    <h1 className="text-text-primary text-xl font-semibold">
+                        {channel.fullname}
+                    </h1>
+                    <p className="text-text-secondary text-sm">
+                        @{channel.username} · {channel.subscribersCount}{" "}
+                        {channel.subscribersCount === 1 ? "subscriber" : "subscribers"}
                     </p>
                 </div>
 
-                <div className="mt-2 md:mt-0">
-                    {currentUser?.username !== profile.username && (
-                        <Button 
-                            onClick={handleSubscribe} 
-                            className={`rounded-full px-6 py-2 font-semibold ${
-                                profile.isSubscribed 
-                                ? "bg-gray-800 text-white hover:bg-gray-700" 
-                                : "bg-white text-black hover:bg-gray-200"
-                            }`}
-                        >
-                            {profile.isSubscribed ? "Subscribed" : "Subscribe"}
-                        </Button>
-                    )}
-                </div>
+                {!isOwnChannel && (
+                    <Button
+                        variant={channel.isSubscribed ? "secondary" : "primary"}
+                        isLoading={subscribeBusy}
+                        onClick={handleToggleSubscribe}
+                    >
+                        {channel.isSubscribed ? "Subscribed" : "Subscribe"}
+                    </Button>
+                )}
             </div>
 
-            {/* Tabs */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-8 border-b border-gray-800">
-                <div className="flex gap-8 text-sm font-medium">
-                    <button className="pb-3 text-white border-b-2 border-white">Videos</button>
-                    <button className="pb-3 text-gray-400 hover:text-white transition-colors">Playlists</button>
-                    <button className="pb-3 text-gray-400 hover:text-white transition-colors">Tweets</button>
-                </div>
+            <div className="flex gap-2 px-4 sm:px-6 pt-3 border-b border-border">
+                {TABS.map((tab) => (
+                    <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                            activeTab === tab
+                                ? "border-brand text-text-primary"
+                                : "border-transparent text-text-secondary hover:text-text-primary"
+                        }`}
+                    >
+                        {tab}
+                    </button>
+                ))}
             </div>
 
-            {/* Video Grid */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-6">
-                {videos.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {videos.map((video) => (
-                            <VideoCard key={video._id} video={video} />
-                        ))}
+            <div className="p-4 sm:p-6">
+                {activeTab === "Videos" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-6">
+                        {tabLoading
+                            ? Array.from({ length: 4 }).map((_, i) => (
+                                  <VideoCardSkeleton key={i} />
+                              ))
+                            : videos.map((video) => (
+                                  <VideoCard key={video._id} video={{ ...video, owner: channel }} />
+                              ))}
                     </div>
-                ) : (
-                    <EmptyState message="This channel hasn't uploaded any videos yet." />
+                )}
+
+                {activeTab === "Videos" && !tabLoading && videos.length === 0 && (
+                    <EmptyState
+                        icon={<FiVideo size={36} />}
+                        title="No videos yet"
+                        description={`${channel.username} hasn't uploaded anything yet.`}
+                    />
+                )}
+
+                {activeTab === "Tweets" && (
+                    <div className="flex flex-col gap-3 max-w-xl">
+                        {!tabLoading &&
+                            tweets.map((tweet) => (
+                                <div
+                                    key={tweet._id}
+                                    className="bg-surface border border-border rounded-lg p-4"
+                                >
+                                    <p className="text-text-primary text-sm">
+                                        {tweet.content}
+                                    </p>
+                                </div>
+                            ))}
+                        {!tabLoading && tweets.length === 0 && (
+                            <EmptyState
+                                icon={<FiMessageSquare size={36} />}
+                                title="No tweets yet"
+                            />
+                        )}
+                    </div>
                 )}
             </div>
         </div>
     );
-}
+};
+
+export default ChannelPage;
